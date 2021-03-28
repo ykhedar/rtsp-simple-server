@@ -30,6 +30,11 @@ pprof: no
 # port of the pprof listener.
 pprofPort: 9999
 
+# enable an HTTP API.
+api: no
+# port of the HTTP API listener.
+apiPort: 8888
+
 # command to run when a client connects to the server.
 # this is terminated with SIGINT when a client disconnects from the server.
 # the server port is available in the RTSP_PORT variable.
@@ -43,7 +48,7 @@ runOnConnectRestart: no
 # disable support for the RTSP protocol.
 rtspDisable: no
 # supported RTSP stream protocols.
-# UDP is the most performant, but can cause problems if there's a NAT between
+# UDP is the most performant, but doesn't work when there's a NAT between
 # server and clients, and doesn't support encryption.
 # TCP is the most versatile, and does support encryption.
 # The handshake is always performed with TCP.

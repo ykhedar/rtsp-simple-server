@@ -61,6 +61,8 @@ type Conf struct {
 	MetricsPort           int                             `yaml:"metricsPort"`
 	PPROF                 bool                            `yaml:"pprof"`
 	PPROFPort             int                             `yaml:"pprofPort"`
+	API                   bool                            `yaml:"api"`
+	APIPort               int                             `yaml:"apiPort"`
 	RunOnConnect          string                          `yaml:"runOnConnect"`
 	RunOnConnectRestart   bool                            `yaml:"runOnConnectRestart"`
 
@@ -84,7 +86,7 @@ type Conf struct {
 	RTMPDisable bool `yaml:"rtmpDisable"`
 	RTMPPort    int  `yaml:"rtmpPort"`
 
-	// path
+	// paths
 	Paths map[string]*PathConf `yaml:"paths"`
 }
 
@@ -145,6 +147,10 @@ func (conf *Conf) fillAndCheck() error {
 
 	if conf.PPROFPort == 0 {
 		conf.MetricsPort = 9999
+	}
+
+	if conf.APIPort == 0 {
+		conf.APIPort = 8888
 	}
 
 	if len(conf.Protocols) == 0 {

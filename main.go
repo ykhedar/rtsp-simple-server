@@ -9,6 +9,7 @@ import (
 	"github.com/aler9/gortsplib"
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/aler9/rtsp-simple-server/internal/api"
 	"github.com/aler9/rtsp-simple-server/internal/clientman"
 	"github.com/aler9/rtsp-simple-server/internal/conf"
 	"github.com/aler9/rtsp-simple-server/internal/confwatcher"
@@ -32,6 +33,7 @@ type program struct {
 	logger          *logger.Logger
 	metrics         *metrics.Metrics
 	pprof           *pprof.PPROF
+	api             *api.API
 	serverRTSPPlain *serverrtsp.Server
 	serverRTSPTLS   *serverrtsp.Server
 	serverRTMP      *serverrtmp.Server
@@ -39,7 +41,11 @@ type program struct {
 	clientMan       *clientman.ClientManager
 	confWatcher     *confwatcher.ConfWatcher
 
+	// in
+	apiGetConf chan api.GetConfReq
 	terminate chan struct{}
+
+	// out
 	done      chan struct{}
 }
 
@@ -64,6 +70,7 @@ func newProgram(args []string) (*program, bool) {
 
 	p := &program{
 		confPath:  *argConfPath,
+		apiGetConf: make(chan api.GetConfReq),
 		terminate: make(chan struct{}),
 		done:      make(chan struct{}),
 	}
@@ -130,6 +137,9 @@ outer:
 				break outer
 			}
 
+		case req := <-p.apiGetConf:
+			res.Res <- api.GetConRes{}
+
 		case <-p.terminate:
 			break outer
 		}
@@ -184,6 +194,18 @@ func (p *program) createResources(initial bool) error {
 			p.pprof, err = pprof.New(
 				p.conf.ListenIP,
 				p.conf.PPROFPort,
+				p)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if p.conf.API {
+		if p.api == nil {
+			p.api, err = api.New(
+				p.conf.ListenIP,
+				p.conf.APIPort,
 				p)
 			if err != nil {
 				return err
@@ -309,6 +331,16 @@ func (p *program) closeResources(newConf *conf.Conf) {
 		closePPROF = true
 	}
 
+	closeAPI := false
+	if newConf == nil ||
+		newConf.API != p.conf.API ||
+		newConf.ListenIP != p.conf.ListenIP ||
+		newConf.APIPort != p.conf.APIPort {
+		closeAPI = true
+	} else if p.api != nil {
+		// asdasd
+	}
+
 	closeServerPlain := false
 	if newConf == nil ||
 		newConf.RTSPDisable != p.conf.RTSPDisable ||
@@ -406,6 +438,17 @@ func (p *program) closeResources(newConf *conf.Conf) {
 		p.serverRTSPPlain = nil
 	}
 
+	if closeAPI && p.api != nil {
+		ch := p.apiGetConf
+		go func() {
+			for range ch {
+			}
+		}()
+		p.api.Close()
+		p.api = nil
+
+	}
+
 	if closePPROF && p.pprof != nil {
 		p.pprof.Close()
 		p.pprof = nil
@@ -438,6 +481,10 @@ func (p *program) reloadConf() error {
 
 	p.conf = newConf
 	return p.createResources(false)
+}
+
+func (p *program) onAPIGetConf(req api.GetConfReq) {
+	p.apiGetConf <- req
 }
 
 func main() {

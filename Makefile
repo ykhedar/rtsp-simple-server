@@ -89,6 +89,7 @@ define CONFIG_RUN
 #rtcpPort: 8003
 #metrics: yes
 #pprof: yes
+api: yes
 
 paths:
   all:
@@ -97,8 +98,8 @@ paths:
 #    readPass: tast
 #    runOnDemand: ffmpeg -re -stream_loop -1 -i testimages/ffmpeg/emptyvideo.mkv -c copy -f rtsp rtsp://localhost:$$RTSP_PORT/$$RTSP_PATH
 
-#  proxied:
-#    source: rtsp://192.168.2.198:554/stream
+  proxied:
+    source: rtsp://192.168.2.170:8554/cam
 #    sourceProtocol: tcp
 #    sourceOnDemand: yes
 #    runOnDemand: ffmpeg -i rtsp://192.168.2.198:554/stream -c copy -f rtsp rtsp://localhost:$$RTSP_PORT/proxied2
