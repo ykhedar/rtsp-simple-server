@@ -57,7 +57,7 @@ func pathNameAndQuery(inURL *url.URL) (string, url.Values) {
 	return pathName, ur.Query()
 }
 
-type trackIDBufPair struct {
+type trackIDPayloadPair struct {
 	trackID int
 	buf     []byte
 }
@@ -82,18 +82,14 @@ type Client struct {
 	readBufferCount     int
 	runOnConnect        string
 	runOnConnectRestart bool
-	stats               *stats.Stats
 	wg                  *sync.WaitGroup
+	stats               *stats.Stats
 	conn                *rtmputils.Conn
 	pathMan             PathMan
 	parent              Parent
 
-	// read mode only
-	h264Decoder *rtph264.Decoder
-	videoTrack  *gortsplib.Track
-	aacDecoder  *rtpaac.Decoder
-	audioTrack  *gortsplib.Track
-	ringBuffer  *ringbuffer.RingBuffer
+	// read
+	ringBuffer *ringbuffer.RingBuffer
 
 	// in
 	terminate chan struct{}
@@ -215,8 +211,10 @@ func (c *Client) runRead() {
 	var videoTrack *gortsplib.Track
 	var h264SPS []byte
 	var h264PPS []byte
+	var h264Decoder *rtph264.Decoder
 	var audioTrack *gortsplib.Track
 	var aacConfig []byte
+	var aacDecoder *rtpaac.Decoder
 
 	err = func() error {
 		for i, t := range tracks {
@@ -273,8 +271,7 @@ func (c *Client) runRead() {
 				Data: b,
 			})
 
-			c.h264Decoder = rtph264.NewDecoder()
-			c.videoTrack = videoTrack
+			h264Decoder = rtph264.NewDecoder()
 		}
 
 		if audioTrack != nil {
@@ -285,8 +282,7 @@ func (c *Client) runRead() {
 			})
 
 			clockRate, _ := audioTrack.ClockRate()
-			c.aacDecoder = rtpaac.NewDecoder(clockRate)
-			c.audioTrack = audioTrack
+			aacDecoder = rtpaac.NewDecoder(clockRate)
 		}
 
 		c.ringBuffer = ringbuffer.New(uint64(c.readBufferCount))
@@ -326,13 +322,12 @@ func (c *Client) runRead() {
 				if !ok {
 					return fmt.Errorf("terminated")
 				}
-
-				pair := data.(trackIDBufPair)
+				pair := data.(trackIDPayloadPair)
 
 				now := time.Now()
 
-				if c.videoTrack != nil && pair.trackID == c.videoTrack.ID {
-					nts, err := c.h264Decoder.Decode(pair.buf)
+				if videoTrack != nil && pair.trackID == videoTrack.ID {
+					nts, err := h264Decoder.Decode(pair.buf)
 					if err != nil {
 						if err != rtph264.ErrMorePacketsNeeded {
 							c.log(logger.Debug, "ERR while decoding video track: %v", err)
@@ -368,8 +363,8 @@ func (c *Client) runRead() {
 						videoBuf = append(videoBuf, nt.NALU)
 					}
 
-				} else if c.audioTrack != nil && pair.trackID == c.audioTrack.ID {
-					ats, err := c.aacDecoder.Decode(pair.buf)
+				} else if audioTrack != nil && pair.trackID == audioTrack.ID {
+					ats, err := aacDecoder.Decode(pair.buf)
 					if err != nil {
 						c.log(logger.Debug, "ERR while decoding audio track: %v", err)
 						continue
@@ -658,8 +653,8 @@ func (c *Client) Authenticate(authMethods []headers.AuthMethod,
 }
 
 // OnFrame implements path.Reader.
-func (c *Client) OnFrame(trackID int, streamType gortsplib.StreamType, buf []byte) {
+func (c *Client) OnFrame(trackID int, streamType gortsplib.StreamType, payload []byte) {
 	if streamType == gortsplib.StreamTypeRTP {
-		c.ringBuffer.Push(trackIDBufPair{trackID, buf})
+		c.ringBuffer.Push(trackIDPayloadPair{trackID, payload})
 	}
 }
